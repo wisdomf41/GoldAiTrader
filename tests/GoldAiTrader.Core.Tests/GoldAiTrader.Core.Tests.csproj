@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GoldAiTrader.Core\GoldAiTrader.Core.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Market\GoldAiTrader.Market.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Risk\GoldAiTrader.Risk.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Strategy\GoldAiTrader.Strategy.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Execution\GoldAiTrader.Execution.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Backtesting\GoldAiTrader.Backtesting.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Data\GoldAiTrader.Data.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Platform\GoldAiTrader.Platform.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.ML\GoldAiTrader.ML.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Bot\GoldAiTrader.Bot.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Adapters.CTrader\GoldAiTrader.Adapters.CTrader.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Adapters.MT5\GoldAiTrader.Adapters.MT5.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.MT5.BridgeHost\GoldAiTrader.MT5.BridgeHost.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

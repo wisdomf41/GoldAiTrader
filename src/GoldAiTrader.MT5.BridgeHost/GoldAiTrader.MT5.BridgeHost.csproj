@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../GoldAiTrader.Adapters.MT5/GoldAiTrader.Adapters.MT5.csproj" />
+    <ProjectReference Include="../GoldAiTrader.Core/GoldAiTrader.Core.csproj" />
+    <ProjectReference Include="../GoldAiTrader.Execution/GoldAiTrader.Execution.csproj" />
+    <ProjectReference Include="../GoldAiTrader.Platform/GoldAiTrader.Platform.csproj" />
+  </ItemGroup>
+</Project>

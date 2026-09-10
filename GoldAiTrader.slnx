@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="AGENTS.md" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/GoldAiTrader.Adapters.CTrader/GoldAiTrader.Adapters.CTrader.csproj" />
+    <Project Path="src/GoldAiTrader.Adapters.MT5/GoldAiTrader.Adapters.MT5.csproj" />
+    <Project Path="src/GoldAiTrader.Backtesting/GoldAiTrader.Backtesting.csproj" />
+    <Project Path="src/GoldAiTrader.Bot/GoldAiTrader.Bot.csproj" />
+    <Project Path="src/GoldAiTrader.Data/GoldAiTrader.Data.csproj" />
+    <Project Path="src/GoldAiTrader.Execution/GoldAiTrader.Execution.csproj" />
+    <Project Path="src/GoldAiTrader.Market/GoldAiTrader.Market.csproj" />
+    <Project Path="src/GoldAiTrader.MT5.BridgeHost/GoldAiTrader.MT5.BridgeHost.csproj" />
+    <Project Path="src/GoldAiTrader.ML/GoldAiTrader.ML.csproj" />
+    <Project Path="src/GoldAiTrader.Platform/GoldAiTrader.Platform.csproj" />
+    <Project Path="src/GoldAiTrader.Risk/GoldAiTrader.Risk.csproj" />
+    <Project Path="src/GoldAiTrader.Strategy/GoldAiTrader.Strategy.csproj" />
+  </Folder>
+  <Project Path="src/GoldAiTrader.Core/GoldAiTrader.Core.csproj" Id="e8d90b02-5837-43e0-99ab-1f848e2ff8f1" />
+  <Project Path="tests/GoldAiTrader.Core.Tests/GoldAiTrader.Core.Tests.csproj" Id="652a7f8f-9cbd-4bc2-87be-1139e2583607" />
+</Solution>
