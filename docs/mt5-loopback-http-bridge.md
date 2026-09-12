@@ -140,7 +140,7 @@ skipped so repeated pre-delivery cancellation/timeout cannot poison the FIFO.
 Bounded in-memory tombstones distinguish acknowledged commands, known non-delivery, and delivered
 commands that ended `Indeterminate`. A late acknowledgement for an indeterminate delivered
 command is rejected with `acknowledgement_indeterminate`; it is not converted into success and
-cannot complete a different command. NO_10 does not use late acknowledgements to update durable
+cannot complete a different command. The current implementation does not use late acknowledgements to update durable
 execution state. Broker-position reconciliation remains authoritative for every `Indeterminate`
 execution.
 

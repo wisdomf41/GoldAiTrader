@@ -24,7 +24,7 @@ Universal Platform Gateway
 GoldAiTrader Engine
 ```
 
-NO_9 implements only the deterministic C# foundation. It does not include an EA, HTTP server,
+The current implementation provides only the deterministic C# foundation. It does not include an EA, HTTP server,
 broker connection, credential, or real order path.
 
 ## Project and universal gateway
@@ -217,7 +217,7 @@ Partial metadata remains ambiguous under the existing `PositionOwnership` rules.
 `MT5ExecutionGateway` implements the existing `IExecutionGateway`; it does not bypass
 `GatewayTradeExecutor`.
 
-`IMT5LoopbackExecutionTransport` defines the command/acknowledgement boundary. NO_10 adds the
+`IMT5LoopbackExecutionTransport` defines the command/acknowledgement boundary. The current implementation adds the
 bounded in-memory polling implementation in the separate `GoldAiTrader.MT5.BridgeHost` process.
 See `docs/mt5-loopback-http-bridge.md` for its authenticated wire contract and safety limits.
 
@@ -237,7 +237,7 @@ unsafe retry assumption.
 
 ## Loopback and authentication
 
-The NO_10 endpoint binds only to `127.0.0.1`. It must never bind to `0.0.0.0`, a LAN
+The loopback bridge endpoint binds only to `127.0.0.1`. It must never bind to `0.0.0.0`, a LAN
 interface, or an Internet-facing address. `MT5LoopbackEndpoint` rejects non-loopback hosts,
 non-HTTP schemes, and credentials embedded in a URI.
 
