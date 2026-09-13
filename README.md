@@ -1,5 +1,7 @@
 # GoldAiTrader
 
+[![CI](https://github.com/wisdomf41/GoldAiTrader/actions/workflows/ci.yml/badge.svg)](https://github.com/wisdomf41/GoldAiTrader/actions/workflows/ci.yml)
+
 GoldAiTrader is a modular C#/.NET algorithmic trading research and execution platform focused initially on XAUUSD (Gold).
 
 The project is designed around broker independence, deterministic strategy development, controlled risk, realistic backtesting, secure execution boundaries, and demo-first validation.
