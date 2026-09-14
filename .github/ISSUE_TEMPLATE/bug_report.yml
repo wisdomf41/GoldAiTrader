@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible problem in GoldAiTrader.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please provide enough detail for the issue to be reproduced safely.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem description
+      description: Clearly describe what happened and what you expected instead.
+      placeholder: Describe the problem...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reliable sequence that reproduces the issue.
+      placeholder: |
+        1. Start...
+        2. Configure...
+        3. Run...
+        4. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, .NET version, database, adapter/platform, and relevant configuration.
+      placeholder: |
+        OS:
+        .NET:
+        Database:
+        Adapter/platform:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or diagnostic output
+      description: Paste relevant logs, stack traces, or test output. Remove secrets and credentials first.
+      render: shell
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I have removed passwords, API keys, broker credentials, tokens, and other secrets.
+          required: true
+        - label: I understand that live trading should not be enabled to reproduce a normal development issue.
+          required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add anything else that may help diagnose the issue.
