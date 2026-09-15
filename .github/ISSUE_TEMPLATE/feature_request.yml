@@ -1,0 +1,70 @@
+name: Feature request
+description: Suggest a new capability or improvement for GoldAiTrader.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please explain the problem, the proposed solution, and any safety implications.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What problem does this feature solve, or what capability is currently missing?
+      placeholder: Describe the problem or opportunity...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or design you would like to see.
+      placeholder: Describe the proposed solution...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any other approaches you considered.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Project area
+      options:
+        - Core / domain
+        - Market data / indicators
+        - Strategy
+        - Risk management
+        - Execution / reconciliation
+        - Backtesting
+        - Data / persistence
+        - Machine learning
+        - Platform gateway
+        - MT5 adapter / bridge
+        - cTrader adapter
+        - Bot runtime
+        - Testing / CI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Trading safety considerations
+      description: Explain whether this could affect risk limits, stop-loss behavior, execution, reconciliation, credentials, or live-trading boundaries.
+      placeholder: Describe any safety impact or state that there is none.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add diagrams, examples, references, or other useful context.
