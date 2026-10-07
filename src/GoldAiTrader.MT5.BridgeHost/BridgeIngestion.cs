@@ -46,41 +46,48 @@ public interface IMT5BridgeIngestionService
 
 public sealed class MT5BridgeIngestionService(
     MT5BridgeState state,
-    MT5PollingExecutionTransport executionTransport) : IMT5BridgeIngestionService
+    MT5PollingExecutionTransport executionTransport,
+    MT5BridgeHealthMonitor healthMonitor) : IMT5BridgeIngestionService
 {
     public MT5IngestionResult Accept(MT5HeartbeatMessage message)
     {
         state.AcceptHeartbeat(message);
+        healthMonitor.Observe();
         return MT5IngestionResult.Accepted;
     }
 
     public MT5IngestionResult Accept(MT5ConnectionStateMessage message)
     {
         state.AcceptConnectionState(message);
+        healthMonitor.Observe();
         return MT5IngestionResult.Accepted;
     }
 
     public MT5IngestionResult Accept(MT5AccountMessage message)
     {
         state.AcceptAccount(message);
+        healthMonitor.Observe();
         return MT5IngestionResult.Accepted;
     }
 
     public MT5IngestionResult Accept(MT5SymbolMessage message)
     {
         state.AcceptSymbol(message);
+        healthMonitor.Observe();
         return MT5IngestionResult.Accepted;
     }
 
     public MT5IngestionResult Accept(MT5PositionInventoryMessage message)
     {
         state.AcceptPositions(message);
+        healthMonitor.Observe();
         return MT5IngestionResult.Accepted;
     }
 
     public MT5IngestionResult Accept(MT5CompletedBarMessage message)
     {
         state.AcceptCompletedBar(message);
+        healthMonitor.Observe();
         return MT5IngestionResult.Accepted;
     }
 
@@ -171,11 +178,16 @@ public sealed class MT5BridgeRequestProcessor(
         }
         catch (InvalidOperationException exception)
         {
+            // Updated: classify bridge-state conflicts consistently without exposing validation details.
             var conflict = exception.Message.Contains("duplicat", StringComparison.OrdinalIgnoreCase) ||
                 exception.Message.Contains("older", StringComparison.OrdinalIgnoreCase) ||
-                exception.Message.Contains("replay", StringComparison.OrdinalIgnoreCase);
-            logger.LogWarning("MT5 bridge state rejected {MessageType} as {Category}.",
-                typeof(T).Name, conflict ? "conflict" : "unsafe");
+                exception.Message.Contains("replay", StringComparison.OrdinalIgnoreCase) ||
+                exception.Message.Contains("conflict", StringComparison.OrdinalIgnoreCase);
+
+            logger.LogWarning(
+                "MT5 bridge state rejected {MessageType} as {Category}.",
+                typeof(T).Name,
+                conflict ? "conflict" : "unsafe");
             return conflict
                 ? Error(StatusCodes.Status409Conflict, "bridge_state_conflict",
                     "The message conflicts with newer trusted bridge state.")

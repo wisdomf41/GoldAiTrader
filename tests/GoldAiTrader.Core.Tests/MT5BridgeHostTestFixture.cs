@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using GoldAiTrader.Adapters.MT5;
@@ -13,7 +14,8 @@ namespace GoldAiTrader.Core.Tests;
 
 internal sealed class MT5BridgeHostTestFixture : IAsyncDisposable
 {
-    internal const string Secret = "test-only-secret-value-32-bytes-minimum";
+    internal static readonly string Secret =
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     internal static readonly DateTimeOffset InitialTime =
         DateTimeOffset.Parse("2026-09-08T10:00:00Z");
 

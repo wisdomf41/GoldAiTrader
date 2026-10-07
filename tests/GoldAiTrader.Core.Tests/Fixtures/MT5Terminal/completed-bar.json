@@ -1,0 +1,1 @@
+{"envelope":{"protocolVersion":"1.0","bridgeInstanceId":"bridge-http-a","sentAtUtc":"2026-09-08T10:00:00.0000000+00:00"},"bar":{"brokerSymbol":"GOLD.test","canonicalSymbol":"XAUUSD","timeframe":"00:05:00","openTimeUtc":"2026-09-08T09:55:00.0000000+00:00","open":2000,"high":2002,"low":1999,"close":2001,"bid":2001,"ask":2001.1,"volume":25}}

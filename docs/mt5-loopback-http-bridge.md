@@ -2,12 +2,12 @@
 
 ## Boundary
 
-`GoldAiTrader.MT5.BridgeHost` is the HTTP/JSON boundary between a future chart-attached
+`GoldAiTrader.MT5.BridgeHost` is the HTTP/JSON boundary between the chart-attached telemetry-only
 MetaTrader 5 EA and `GoldAiTrader.Adapters.MT5`. It is a separate ASP.NET Core process,
 keeping hosting, authentication, replay defence, parsing, and limits out of the adapter.
 
 ```text
-Future GoldAiTraderBridge.mq5
+GoldAiTraderBridge.mq5
             | WebRequest
         HTTP / JSON
             |
@@ -22,8 +22,9 @@ GoldAiTrader.MT5.BridgeHost
      GoldAiTrader Engine
 ```
 
-This is transport, not strategy or risk authority. It includes no MQL5 EA, broker connector,
-PostgreSQL/cTrader dependency, credential, or real order path.
+This is transport, not strategy or risk authority. The repository now includes the MQL5 telemetry
+publisher under `platforms/mt5/GoldAiTraderBridge`; it includes no command polling, broker order
+submission, PostgreSQL/cTrader dependency, credential, or real order path.
 
 ## Binding and configuration
 
@@ -42,10 +43,12 @@ body limit 256 KiB; JSON depth 32; replay cache 4,096; pending commands 128; com
 
 ## Routes
 
-All routes use `/bridge/mt5/v1`. POST requires `application/json`; queries are rejected.
+Bridge protocol routes use `/bridge/mt5/v1`. POST requires `application/json`; queries are rejected.
 
 | Method | Route | Contract |
 | --- | --- | --- |
+| GET | `/health/live` | Process liveness; independent of MT5 state |
+| GET | `/health/ready` | Current-session telemetry readiness; `200` or `503` |
 | POST | `/heartbeat` | `MT5HeartbeatMessage` |
 | POST | `/connection` | `MT5ConnectionStateMessage` |
 | POST | `/account` | `MT5AccountMessage` |
@@ -54,6 +57,31 @@ All routes use `/bridge/mt5/v1`. POST requires `application/json`; queries are r
 | POST | `/bars/completed` | `MT5CompletedBarMessage` |
 | POST | `/execution/ack` | `MT5ExecutionAcknowledgement` |
 | GET | `/commands/next` | `204` or one claimed command |
+
+
+## Health and observability contract
+
+The two absolute health routes are unauthenticated so local diagnostics or probe tooling can
+query them.
+They remain loopback-only and return only fixed status/category values—never credentials,
+identifiers, broker details, telemetry values, request material, or exception text.
+
+`GET /health/live` returns `200` whenever the host process can serve requests. It is independent
+of terminal connectivity and telemetry freshness.
+
+`GET /health/ready` returns `200` only when the terminal is connected and the heartbeat,
+configured canonical symbol specifications, account snapshot, and full position inventory are
+fresh for the current session. It returns `503` with one bounded reason otherwise:
+`terminal_disconnected`, `heartbeat_missing`, `heartbeat_stale`, `account_unavailable`,
+`symbol_unavailable`, or `positions_unavailable`. Readiness does not enable execution and is
+valid while `MT5Bridge__ExternalExecutionEnabled=false`.
+
+The host emits logs only when connection or readiness state changes. Built-in
+`System.Diagnostics.Metrics` instruments use meter `GoldAiTrader.MT5.BridgeHost` and expose
+connected/readiness gauges, heartbeat age, bounded transition counts, and telemetry freshness
+failure counts. NO_13 implements no exporter or production supervisor. The meter is an
+instrumentation contract that a future approved exporter, supervisor, or observability
+integration may consume.
 
 ## HMAC authentication and replay
 
@@ -129,8 +157,8 @@ poll. Terminal behavior is deliberately delivery-aware:
 | Timeout after delivery | `Indeterminate` | Broker outcome is unknown; do not retry automatically |
 
 Eligibility requires execution explicitly enabled, healthy host, recent authenticated session,
-healthy connection/heartbeat, fresh current-session account and positions, explicit Demo status,
-and existing universal execution/ownership checks. Unknown fails closed; Live remains blocked.
+healthy connection/heartbeat, fresh current-session account, symbol specifications, and positions,
+explicit Demo status, and existing universal execution/ownership checks. Unknown fails closed.
 
 One poller claims a command. Ack must match a claimed command plus bridge/protocol identity.
 Unknown, premature, mismatched, and duplicate acks cannot complete another command. Pending
@@ -140,7 +168,7 @@ skipped so repeated pre-delivery cancellation/timeout cannot poison the FIFO.
 Bounded in-memory tombstones distinguish acknowledged commands, known non-delivery, and delivered
 commands that ended `Indeterminate`. A late acknowledgement for an indeterminate delivered
 command is rejected with `acknowledgement_indeterminate`; it is not converted into success and
-cannot complete a different command. The current implementation does not use late acknowledgements to update durable
+cannot complete a different command. NO_10 does not use late acknowledgements to update durable
 execution state. Broker-position reconciliation remains authoritative for every `Indeterminate`
 execution.
 
@@ -150,7 +178,53 @@ execution journal remains the system of record.
 ## Deferred
 
 Implemented: authenticated listener, strict bounded ingestion and replay defence, all adapter
-routes, and bounded polling with matched acknowledgement. Deferred: real
-`GoldAiTraderBridge.mq5`; MT5 serialization/extraction and broker mapping; durable delivery across
-restart/reconnect; secret rotation and process supervision; real Demo integration/forward tests;
-and every Live-trading review or enablement. Transport correctness does not validate strategy.
+routes, bounded command polling with matched acknowledgement in C#, and an MQL5 publisher for
+heartbeat, connection, account, symbol, complete position inventory, and completed-bar telemetry.
+The MQL5 publisher has no command polling or order API.
+
+Automated verification on 2 October 2026 passed all 233 tests and the Release build with 0
+warnings and 0 errors. It covers authentication/replay/malformed rejection, ordering,
+reconnect/session invalidation, current-session account/symbol/position freshness, completed-bar
+invalidation/idempotency/conflicts, stale-state failure, execution-disabled defaults, and static
+telemetry-only terminal-source checks.
+
+Actual Demo-terminal verification remains the NO_11 run on 30 September 2026. That revision
+compiled with 0 errors and 0 warnings; authenticated connection, heartbeat, account, symbol,
+position, and initial completed M5/M15 bar requests were accepted; and a runtime observation of
+more than 35 minutes produced no further reported warnings. It does not validate the changed
+NO_12 MQL5 source.
+
+Pending manual verification is to compile the current NO_12 source and exercise controlled
+disconnect/reconnect, heartbeat staleness, broker values, positions, and M5/M15 candles in Demo.
+
+Deferred architecture remains terminal-side command delivery, acknowledgement, and execution;
+secret rotation and process supervision; and every Live-trading review or enablement. Live
+remains blocked.
+
+### NO_13 validation status
+
+Automated verification covers liveness independently of MT5 state; fail-closed readiness for
+disconnected, missing, and stale heartbeat/account/symbol/position state; reconnect
+invalidation/recovery; safe health responses; execution-disabled operation; and subscribable
+health metrics.
+Final NO_13 .NET validation passed all 244 tests. The full Release solution build completed with
+0 warnings and 0 errors.
+
+Manual NO_13 runtime validation was completed with the Demo terminal on 6 October 2026. Before
+the EA was attached, liveness returned `200 healthy/process_alive` and readiness returned
+`503 not_ready/terminal_disconnected`. After fresh heartbeat, account, XAUUSD symbol, and position
+telemetry arrived, readiness returned `200 ready`. Removing the EA made readiness fail closed with
+`503 terminal_disconnected` while liveness remained `200`; reattaching it restored fresh telemetry
+and readiness returned `200` on the first captured post-reconnect sample.
+
+The observed transition sequence was `connected`, `ready`, `disconnected`,
+`not_ready (terminal_disconnected)`, `connected`, `ready`. Logs contained no secret, account or
+broker identifier, authentication material, or raw telemetry. No intermediate post-reconnect
+`503` was manually observed; missing and stale dependency states remain automated-test evidence.
+No external metrics exporter or supervisor was validated. `System.Diagnostics.Metrics` remains an
+automatically tested instrumentation contract. External execution remained false, MQL5 remained
+unchanged and telemetry-only, and Live trading remains blocked.
+
+See `platforms/mt5/GoldAiTraderBridge/README.md` for the manual checklist.
+Transport correctness does not validate strategy performance or establish
+production readiness.

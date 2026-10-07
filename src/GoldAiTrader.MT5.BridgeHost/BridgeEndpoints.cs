@@ -22,6 +22,8 @@ public static class MT5BridgeEndpointExtensions
 {
     public static IEndpointRouteBuilder MapMT5BridgeEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapGet(MT5BridgeHealthRoutes.Liveness, HandleLiveness);
+        endpoints.MapGet(MT5BridgeHealthRoutes.Readiness, HandleReadiness);
         endpoints.MapPost(MT5BridgeRoutes.Heartbeat, HandleHeartbeatAsync);
         endpoints.MapPost(MT5BridgeRoutes.Connection, HandleConnectionAsync);
         endpoints.MapPost(MT5BridgeRoutes.Account, HandleAccountAsync);
@@ -32,6 +34,20 @@ public static class MT5BridgeEndpointExtensions
         endpoints.MapPost(MT5BridgeRoutes.ExecutionAcknowledgement,
             HandleExecutionAcknowledgementAsync);
         return endpoints;
+    }
+
+    private static IResult HandleLiveness(JsonSerializerOptions jsonOptions) =>
+        Results.Json(new MT5BridgeHealthResponse("healthy", "process_alive"), jsonOptions);
+
+    private static IResult HandleReadiness(MT5BridgeHealthMonitor healthMonitor,
+        JsonSerializerOptions jsonOptions)
+    {
+        var snapshot = healthMonitor.Observe();
+        var response = new MT5BridgeHealthResponse(snapshot.Ready ? "ready" : "not_ready",
+            snapshot.Reason.ToWireValue());
+        return Results.Json(response, jsonOptions, statusCode: snapshot.Ready
+            ? StatusCodes.Status200OK
+            : StatusCodes.Status503ServiceUnavailable);
     }
 
     private static Task<IResult> HandleHeartbeatAsync(HttpContext context,

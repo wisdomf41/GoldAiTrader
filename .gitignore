@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# GoldAiTrader MT5 bridge local secrets
+platforms/mt5/GoldAiTraderBridge/Config/bridge.secret
