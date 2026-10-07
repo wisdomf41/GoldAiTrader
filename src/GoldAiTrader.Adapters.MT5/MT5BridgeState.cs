@@ -27,6 +27,21 @@ public sealed record MT5BridgeHealth(bool Healthy, string Reason,
 public sealed record MT5ExecutionSnapshot(bool Ready, string Reason,
     AccountSnapshot? Account);
 
+public enum MT5BridgeReadinessReason
+{
+    Ready,
+    TerminalDisconnected,
+    HeartbeatMissing,
+    HeartbeatStale,
+    AccountUnavailable,
+    SymbolUnavailable,
+    PositionsUnavailable
+}
+
+public sealed record MT5BridgeReadinessSnapshot(bool Ready,
+    MT5BridgeReadinessReason Reason, bool TerminalConnected, bool HeartbeatFresh,
+    TimeSpan? HeartbeatAge);
+
 public sealed class MT5SymbolMapper
 {
     private readonly IReadOnlyDictionary<string, string> brokerSymbols;
@@ -84,6 +99,8 @@ public sealed class MT5BridgeState
         new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<MarketStreamKey, Channel<MarketBar>> streams = new();
     private readonly Dictionary<string, DateTimeOffset> lastSymbolSentAtUtc =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> lastSymbolReceivedAtUtc =
         new(StringComparer.Ordinal);
     private readonly Dictionary<MarketStreamKey, MarketBar> latestBars = [];
     private readonly Dictionary<MarketStreamKey, DateTimeOffset> lastBarOpenTimeUtc = [];
@@ -185,6 +202,8 @@ public sealed class MT5BridgeState
                 lastSentAtUtc == default ? null : lastSentAtUtc, "symbol specification");
             specifications[normalized.CanonicalSymbol] = normalized;
             lastSymbolSentAtUtc[normalized.CanonicalSymbol] = message.Envelope.SentAtUtc;
+            lastSymbolReceivedAtUtc[normalized.CanonicalSymbol] =
+                timeProvider.GetUtcNow().ToUniversalTime();
         }
     }
 
@@ -232,17 +251,40 @@ public sealed class MT5BridgeState
                     StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "MT5 completed bar symbol does not match the trusted canonical mapping.");
+            // Updated: retain strict completed-candle validation without temporary timing diagnostics.
             if (source.OpenTimeUtc + source.Timeframe > message.Envelope.SentAtUtc ||
                 source.OpenTimeUtc + source.Timeframe > timeProvider.GetUtcNow())
+            {
                 throw new InvalidOperationException(
                     "MT5 completed bar interval has not closed.");
+            }
             lastBarSentAtUtc.TryGetValue(key, out var lastSentAtUtc);
             EnsureNewer(message.Envelope.SentAtUtc,
                 lastSentAtUtc == default ? null : lastSentAtUtc, "completed bar");
-            if (lastBarOpenTimeUtc.TryGetValue(key, out var lastOpenTimeUtc) &&
-                source.OpenTimeUtc <= lastOpenTimeUtc)
-                throw new InvalidOperationException(
-                    "MT5 completed bar is duplicated or older than the latest trusted bar.");
+            // Allow an exact completed-bar retry idempotently while rejecting older/conflicting bars.
+            if (lastBarOpenTimeUtc.TryGetValue(key, out var lastOpenTimeUtc))
+            {
+                if (source.OpenTimeUtc < lastOpenTimeUtc)
+                    throw new InvalidOperationException(
+                        "MT5 completed bar is older than the latest trusted bar.");
+
+                if (source.OpenTimeUtc == lastOpenTimeUtc)
+                {
+                    // Updated: require the trusted bar before comparing an idempotent retry.
+                    if (!latestBars.TryGetValue(key, out var existingBar) || existingBar is null)
+                        throw new InvalidOperationException(
+                            "MT5 completed bar retry has no latest trusted bar.");
+
+                    if (existingBar == bar)
+                    {
+                        lastBarSentAtUtc[key] = message.Envelope.SentAtUtc;
+                        return;
+                    }
+
+                    throw new InvalidOperationException(
+                        "MT5 completed bar conflicts with the latest trusted bar.");
+                }
+            }
 
             latestBars[key] = bar;
             lastBarOpenTimeUtc[key] = source.OpenTimeUtc;
@@ -276,10 +318,13 @@ public sealed class MT5BridgeState
         lock (sync)
         {
             EnsureHealthyLocked();
-            return specifications.TryGetValue(canonicalSymbol, out var specification)
-                ? specification
-                : throw new KeyNotFoundException(
+            if (!specifications.TryGetValue(canonicalSymbol, out var specification))
+                throw new KeyNotFoundException(
                     $"No trusted MT5 symbol specification exists for '{canonicalSymbol}'.");
+            lastSymbolReceivedAtUtc.TryGetValue(canonicalSymbol, out var receivedAtUtc);
+            EnsureFreshSnapshotLocked(
+                receivedAtUtc == default ? null : receivedAtUtc, "symbol specification");
+            return specification;
         }
     }
 
@@ -319,11 +364,53 @@ public sealed class MT5BridgeState
                 return new(false, health.Reason, null);
             if (account is null || !IsFreshSnapshotLocked(lastAccountReceivedAtUtc, now))
                 return new(false, "MT5 account state is missing or stale.", null);
+            if (CanonicalSymbols.Any(symbol =>
+                    !specifications.ContainsKey(symbol) ||
+                    !lastSymbolReceivedAtUtc.TryGetValue(symbol, out var receivedAtUtc) ||
+                    !IsFreshSnapshotLocked(receivedAtUtc, now)))
+                return new(false, "MT5 symbol specification is missing or stale.", account);
             if (positions is null || !IsFreshSnapshotLocked(lastPositionsReceivedAtUtc, now))
                 return new(false, "MT5 position inventory is missing or stale.", account);
 
             return new(true, "MT5 execution snapshots are fresh for the current session.",
                 account);
+        }
+    }
+
+    public MT5BridgeReadinessSnapshot GetReadinessSnapshot()
+    {
+        lock (sync)
+        {
+            var now = timeProvider.GetUtcNow().ToUniversalTime();
+            TimeSpan? heartbeatAge = lastHeartbeatReceivedAtUtc is null
+                ? null
+                : now - lastHeartbeatReceivedAtUtc.Value;
+            var heartbeatFresh = heartbeatAge is { } age && age >= TimeSpan.Zero &&
+                age <= options.EffectiveHeartbeatFreshness;
+
+            if (!terminalConnected)
+                return new(false, MT5BridgeReadinessReason.TerminalDisconnected, false,
+                    heartbeatFresh, heartbeatAge);
+            if (lastHeartbeatReceivedAtUtc is null)
+                return new(false, MT5BridgeReadinessReason.HeartbeatMissing, true, false, null);
+            if (heartbeatAge < TimeSpan.Zero ||
+                heartbeatAge > options.EffectiveHeartbeatFreshness)
+                return new(false, MT5BridgeReadinessReason.HeartbeatStale, true, false,
+                    heartbeatAge);
+            if (account is null || !IsFreshSnapshotLocked(lastAccountReceivedAtUtc, now))
+                return new(false, MT5BridgeReadinessReason.AccountUnavailable, true, true,
+                    heartbeatAge);
+            if (CanonicalSymbols.Any(symbol =>
+                    !specifications.ContainsKey(symbol) ||
+                    !lastSymbolReceivedAtUtc.TryGetValue(symbol, out var receivedAtUtc) ||
+                    !IsFreshSnapshotLocked(receivedAtUtc, now)))
+                return new(false, MT5BridgeReadinessReason.SymbolUnavailable, true, true,
+                    heartbeatAge);
+            if (positions is null || !IsFreshSnapshotLocked(lastPositionsReceivedAtUtc, now))
+                return new(false, MT5BridgeReadinessReason.PositionsUnavailable, true, true,
+                    heartbeatAge);
+
+            return new(true, MT5BridgeReadinessReason.Ready, true, true, heartbeatAge);
         }
     }
 
@@ -489,7 +576,10 @@ public sealed class MT5BridgeState
         positions = null;
         lastPositionsReceivedAtUtc = null;
         specifications.Clear();
+        lastSymbolReceivedAtUtc.Clear();
         latestBars.Clear();
+        lastBarOpenTimeUtc.Clear();
+        lastBarSentAtUtc.Clear();
 
         foreach (var stream in streams.Values)
             stream.Writer.TryComplete();

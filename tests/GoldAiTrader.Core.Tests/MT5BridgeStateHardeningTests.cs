@@ -61,32 +61,74 @@ public sealed class MT5BridgeStateHardeningTests
     }
 
     [Fact]
-    public void DuplicateAndOutOfOrderCompletedBarsAreRejected()
+    public void ExactDuplicateCompletedBarIsIdempotentButOlderBarsAreRejected()
     {
+        // Updated: exact retries are idempotent; older or reconnect-ambiguous bars remain rejected.
         var (state, clock) = ReadyState();
         var timeframe = TimeSpan.FromMinutes(5);
+
         clock.Advance(TimeSpan.FromSeconds(1));
-        state.AcceptCompletedBar(BarMessage(state, clock.GetUtcNow(),
-            Now - timeframe, timeframe));
+        state.AcceptCompletedBar(BarMessage(
+            state,
+            clock.GetUtcNow(),
+            Now - timeframe,
+            timeframe));
+
         clock.Advance(TimeSpan.FromSeconds(1));
 
-        Assert.Throws<InvalidOperationException>(() =>
-            state.AcceptCompletedBar(BarMessage(state, clock.GetUtcNow(),
-                Now - timeframe, timeframe)));
-        Assert.Throws<InvalidOperationException>(() =>
-            state.AcceptCompletedBar(BarMessage(state, clock.GetUtcNow(),
-                Now - (timeframe * 2), timeframe)));
+        // Exact retry of the already trusted bar must be accepted idempotently.
+        state.AcceptCompletedBar(BarMessage(
+            state,
+            clock.GetUtcNow(),
+            Now - timeframe,
+            timeframe));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var conflict = BarMessage(state, clock.GetUtcNow(), Now - timeframe, timeframe);
+        var conflictError = Assert.Throws<InvalidOperationException>(() =>
+            state.AcceptCompletedBar(conflict with
+            {
+                Bar = conflict.Bar with { Close = 2000.5m }
+            }));
+        Assert.Contains("conflicts", conflictError.Message,
+            StringComparison.OrdinalIgnoreCase);
 
-        Assert.True(state.TryGetLatestCompletedBar("XAUUSD", timeframe, out var latest));
+        // A genuinely older bar must still fail closed.
+        Assert.Throws<InvalidOperationException>(() =>
+            state.AcceptCompletedBar(BarMessage(
+                state,
+                clock.GetUtcNow(),
+                Now - (timeframe * 2),
+                timeframe)));
+
+        Assert.True(state.TryGetLatestCompletedBar(
+            "XAUUSD",
+            timeframe,
+            out var latest));
+
         Assert.Equal(Now - timeframe, latest!.OpenTime);
 
+        // Updated: reconnect resets completed-bar tracking so the new session can trust its first valid bar.
         DisconnectAndReconnect(state, clock);
-        state.AcceptSymbol(new(Envelope(state, clock.GetUtcNow()), Symbol()));
-        Assert.Throws<InvalidOperationException>(() =>
-            state.AcceptCompletedBar(BarMessage(state, clock.GetUtcNow(),
-                Now - timeframe, timeframe)));
         Assert.False(state.TryGetLatestCompletedBar("XAUUSD", timeframe, out _));
+        state.AcceptSymbol(new(
+            Envelope(state, clock.GetUtcNow()),
+            Symbol()));
+
+        state.AcceptCompletedBar(BarMessage(
+            state,
+            clock.GetUtcNow(),
+            Now - timeframe,
+            timeframe));
+
+        Assert.True(state.TryGetLatestCompletedBar(
+            "XAUUSD",
+            timeframe,
+            out var reconnectedBar));
+
+        Assert.NotNull(reconnectedBar);
+        Assert.Equal(Now - timeframe, reconnectedBar.OpenTime);
     }
+
 
     [Fact]
     public void FutureOrUnclosedCompletedBarIsRejected()
@@ -140,13 +182,37 @@ public sealed class MT5BridgeStateHardeningTests
         state.AcceptAccount(new(Envelope(state, clock.GetUtcNow()), Account()));
         Assert.False(state.GetExecutionSnapshot().Ready);
 
-        state.AcceptSymbol(new(Envelope(state, clock.GetUtcNow()), Symbol()));
         state.AcceptPositions(new(Envelope(state, clock.GetUtcNow()),
             state.Identity.AccountIdentifier, []));
+        Assert.False(state.GetExecutionSnapshot().Ready);
+        Assert.Throws<KeyNotFoundException>(() =>
+            state.GetTrustedSpecification("XAUUSD"));
+
+        state.AcceptSymbol(new(Envelope(state, clock.GetUtcNow()), Symbol()));
 
         var readiness = state.GetExecutionSnapshot();
         Assert.True(readiness.Ready);
         Assert.Equal(AccountEnvironment.Demo, readiness.Account!.Environment);
+    }
+
+    [Fact]
+    public void StaleSymbolSpecificationCannotAuthorizeExecution()
+    {
+        var clock = new ManualTimeProvider(Now);
+        var state = new MT5BridgeState(Identity(), Mappings(),
+            new(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5)), clock);
+        ApplyReadySnapshot(state, clock);
+        clock.Advance(TimeSpan.FromSeconds(6));
+        var envelope = Envelope(state, clock.GetUtcNow());
+        state.AcceptHeartbeat(new(envelope, true));
+        state.AcceptAccount(new(envelope, Account()));
+        state.AcceptPositions(new(envelope, state.Identity.AccountIdentifier, []));
+
+        Assert.True(state.GetHealth().Healthy);
+        Assert.False(state.GetExecutionSnapshot().Ready);
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            state.GetTrustedSpecification("XAUUSD"));
+        Assert.Contains("stale", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

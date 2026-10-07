@@ -28,6 +28,8 @@ public static class MT5BridgeHostApplication
         builder.Services.AddSingleton(clock);
         builder.Services.AddSingleton(new MT5BridgeState(settings.Identity,
             settings.SymbolMappings, timeProvider: clock));
+        builder.Services.AddSingleton<MT5BridgeHealthMetrics>();
+        builder.Services.AddSingleton<MT5BridgeHealthMonitor>();
         builder.Services.AddSingleton<JsonSerializerOptions>(
             MT5BridgeJson.CreateOptions(settings.Host.MaximumJsonDepth));
         builder.Services.AddSingleton<MT5RequestReplayCache>();

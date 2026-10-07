@@ -1,0 +1,18 @@
+{
+  "MT5Bridge": {
+    "BindAddress": "127.0.0.1",
+    "Port": 5088,
+    "ExternalExecutionEnabled": false,
+    "Identity": {
+      "BridgeInstanceId": "REPLACE_WITH_UNIQUE_BRIDGE_ID",
+      "TerminalInstanceId": "REPLACE_WITH_TERMINAL_ID",
+      "BrokerName": "REPLACE_WITH_BROKER_NAME",
+      "AccountIdentifier": "REPLACE_WITH_NUMERIC_MT5_LOGIN",
+      "AdapterVersion": "1.0.0",
+      "ProtocolVersion": "1.0"
+    },
+    "SymbolMappings": {
+      "XAUUSD": "REPLACE_WITH_EXACT_BROKER_SYMBOL"
+    }
+  }
+}

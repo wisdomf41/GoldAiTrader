@@ -1,0 +1,1 @@
+{"envelope":{"protocolVersion":"1.0","bridgeInstanceId":"bridge-http-a","sentAtUtc":"2026-09-08T10:00:00.0000000+00:00"},"symbol":{"brokerSymbol":"GOLD.test","canonicalSymbol":"XAUUSD","tickSize":0.01,"tickValuePerVolumeUnit":1,"contractSize":100,"minVolume":0.01,"maxVolume":100,"volumeStep":0.01,"minStopDistance":0.1,"isTradingAvailable":true}}

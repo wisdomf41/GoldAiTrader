@@ -96,6 +96,31 @@ public sealed class MT5BridgeHostIngestionTests
     }
 
     [Fact]
+    public async Task AuthenticatedReconnectInvalidatesCompletedBarsAndSymbolState()
+    {
+        await using var host = await MT5BridgeHostTestFixture.StartAsync();
+        await host.PrepareReadyStateAsync();
+        var timeframe = TimeSpan.FromMinutes(5);
+        await host.SendAcceptedAsync(HttpMethod.Post, MT5BridgeRoutes.CompletedBar,
+            new MT5CompletedBarMessage(host.Envelope(), new("GOLD.test", "XAUUSD", timeframe,
+                host.Clock.GetUtcNow() - timeframe, 2000m, 2002m, 1999m, 2001m,
+                2000.9m, 2001m, 25m)));
+        Assert.True(host.State.TryGetLatestCompletedBar("XAUUSD", timeframe, out _));
+        host.Clock.Advance(TimeSpan.FromSeconds(1));
+
+        await host.SendAcceptedAsync(HttpMethod.Post, MT5BridgeRoutes.Connection,
+            new MT5ConnectionStateMessage(host.Envelope(), false));
+        host.Clock.Advance(TimeSpan.FromSeconds(1));
+        await host.SendAcceptedAsync(HttpMethod.Post, MT5BridgeRoutes.Heartbeat,
+            new MT5HeartbeatMessage(host.Envelope(), true));
+
+        Assert.False(host.State.TryGetLatestCompletedBar("XAUUSD", timeframe, out _));
+        Assert.Throws<KeyNotFoundException>(() =>
+            host.State.GetTrustedSpecification("XAUUSD"));
+        Assert.False(host.State.GetExecutionSnapshot().Ready);
+    }
+
+    [Fact]
     public async Task LiveAccountRemainsNonExecutableThroughHttpHost()
     {
         var options = MT5BridgeHostTestFixture.ValidOptions() with
