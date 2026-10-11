@@ -201,9 +201,13 @@ bounded not-ready category and HTTP `503`. Readiness never grants execution auth
 
 Connection and readiness logs are emitted only on state changes. The built-in
 `System.Diagnostics.Metrics` meter `GoldAiTrader.MT5.BridgeHost` exposes connected/readiness
-gauges, heartbeat age, bounded transitions, and telemetry freshness failures. NO_13 implements no
-exporter or production supervisor; this instrumentation contract may be consumed by a future
-approved exporter, supervisor, or observability integration.
+gauges, heartbeat age, bounded transitions, and telemetry freshness failures. The background
+health supervisor now observes that same monitor independently of requests and incoming telemetry.
+Stable OpenTelemetry packages export only this meter over OTLP to an OpenTelemetry Collector.
+The Collector exposes Prometheus metrics; BridgeHost has no direct `/metrics` route.
+The monitoring path is BridgeHost -> OTLP -> Collector -> Prometheus -> Grafana.
+See [the HTTP bridge observability contract](mt5-loopback-http-bridge.md#health-and-observability-contract)
+for the bounded supervision interval, OTLP settings, Collector configuration, labels, and security controls.
 
 External execution remains disabled. These probes observe the existing fail-closed state; they do
 not bypass strategy, risk, gateway, account-environment, ownership, or execution controls.
