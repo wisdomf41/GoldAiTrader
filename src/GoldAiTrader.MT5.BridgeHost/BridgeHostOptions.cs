@@ -18,6 +18,7 @@ public sealed record MT5BridgeHostOptions
     public int ReplayCacheCapacity { get; init; } = 4096;
     public int PendingCommandCapacity { get; init; } = 128;
     public TimeSpan CommandTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan HealthSupervisionInterval { get; init; } = TimeSpan.FromSeconds(1);
     public bool ExternalExecutionEnabled { get; init; }
 
     public MT5LoopbackEndpoint Endpoint =>
@@ -25,6 +26,10 @@ public sealed record MT5BridgeHostOptions
 
     public void Validate()
     {
+        if (HealthSupervisionInterval < TimeSpan.FromMilliseconds(100) ||
+            HealthSupervisionInterval > TimeSpan.FromSeconds(30))
+            throw new InvalidOperationException(
+                "MT5 health supervision interval must be between 100 milliseconds and 30 seconds.");
         if (!string.Equals(BindAddress, "127.0.0.1", StringComparison.Ordinal))
             throw new InvalidOperationException(
                 "The MT5 bridge host must bind to the explicit IPv4 address 127.0.0.1.");
@@ -95,6 +100,8 @@ public sealed record MT5BridgeHostSettings(
             PendingCommandCapacity = ParseInt(section["PendingCommandCapacity"], 128),
             CommandTimeout = TimeSpan.FromSeconds(
                 ParseDouble(section["CommandTimeoutSeconds"], 30)),
+            HealthSupervisionInterval = TimeSpan.FromSeconds(
+                ParseDouble(section["HealthSupervisionIntervalSeconds"], 1)),
             ExternalExecutionEnabled = ParseBool(section["ExternalExecutionEnabled"], false)
         };
 

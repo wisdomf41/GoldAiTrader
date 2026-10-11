@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,6 +11,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using OpenTelemetry.Exporter;
 
 namespace GoldAiTrader.Core.Tests;
 
@@ -42,7 +46,7 @@ internal sealed class MT5BridgeHostTestFixture : IAsyncDisposable
         Application.Services.GetRequiredService<MT5RequestReplayCache>();
 
     internal static async Task<MT5BridgeHostTestFixture> StartAsync(
-        MT5BridgeHostOptions? options = null)
+        MT5BridgeHostOptions? options = null, Action<WebApplicationBuilder>? configure = null)
     {
         var clock = new ManualBridgeTimeProvider(InitialTime);
         var hostOptions = options ?? ValidOptions();
@@ -53,6 +57,20 @@ internal sealed class MT5BridgeHostTestFixture : IAsyncDisposable
             ApplicationName = typeof(MT5BridgeHostApplication).Assembly.FullName
         });
         builder.WebHost.UseTestServer();
+        // Keep integration tests independent of local collectors and ambient exporter settings.
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf",
+            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:4318",
+            ["OTEL_EXPORTER_OTLP_HEADERS"] = "",
+            ["OTEL_EXPORTER_OTLP_COMPRESSION"] = "none",
+            ["OTEL_EXPORTER_OTLP_TIMEOUT"] = "1000",
+            ["OTEL_METRIC_EXPORT_INTERVAL"] = int.MaxValue.ToString(),
+            ["OTEL_METRIC_EXPORT_TIMEOUT"] = "1000"
+        });
+        builder.Services.Configure<OtlpExporterOptions>(exporter =>
+            exporter.HttpClientFactory = () => new HttpClient(new CapturingOtlpHandler()));
+        configure?.Invoke(builder);
         var application = MT5BridgeHostApplication.Build(builder, settings, clock);
         await application.StartAsync();
         return new(application, clock, settings);
@@ -154,9 +172,36 @@ internal sealed class MT5BridgeHostTestFixture : IAsyncDisposable
 
 internal sealed class ManualBridgeTimeProvider(DateTimeOffset utcNow) : TimeProvider
 {
-    private DateTimeOffset utcNow = utcNow;
+    private long utcTicks = utcNow.UtcTicks;
 
-    public override DateTimeOffset GetUtcNow() => utcNow;
+    public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref utcTicks), TimeSpan.Zero);
 
-    public void Advance(TimeSpan duration) => utcNow += duration;
+    public void Advance(TimeSpan duration) => Interlocked.Add(ref utcTicks, duration.Ticks);
+}
+
+internal sealed record CapturedOtlpRequest(HttpMethod Method, Uri Endpoint,
+    string? ContentType, byte[] Body);
+
+internal sealed class CapturingOtlpHandler : HttpMessageHandler
+{
+    internal ConcurrentQueue<CapturedOtlpRequest> Requests { get; } = new();
+
+    protected override HttpResponseMessage Send(HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        Requests.Enqueue(new(request.Method, request.RequestUri!,
+            request.Content?.Headers.ContentType?.MediaType,
+            request.Content!.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult()));
+        // An empty protobuf message is a successful ExportMetricsServiceResponse.
+        return new(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent([])
+            {
+                Headers = { ContentType = new MediaTypeHeaderValue("application/x-protobuf") }
+            }
+        };
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+        CancellationToken cancellationToken) => Task.FromResult(Send(request, cancellationToken));
 }

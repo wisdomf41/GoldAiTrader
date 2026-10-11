@@ -79,10 +79,124 @@ valid while `MT5Bridge__ExternalExecutionEnabled=false`.
 The host emits logs only when connection or readiness state changes. Built-in
 `System.Diagnostics.Metrics` instruments use meter `GoldAiTrader.MT5.BridgeHost` and expose
 connected/readiness gauges, heartbeat age, bounded transition counts, and telemetry freshness
-failure counts. NO_13 implements no exporter or production supervisor. The meter is an
-instrumentation contract that a future approved exporter, supervisor, or observability
-integration may consume.
+failure counts. A hosted supervisor observes the same health monitor at startup and every second,
+including when no telemetry or readiness requests arrive. Set
+`MT5Bridge:HealthSupervisionIntervalSeconds` (environment variable
+`MT5Bridge__HealthSupervisionIntervalSeconds`) to a value from 0.1 through 30 seconds.
+Startup rejects intervals outside that range. Detection latency is up to one interval plus
+scheduler delay. Repeated observations of unchanged state do not add transition logs or counters.
+Shutdown cancels the timer wait and disposes the timer.
 
+### OTLP export and Prometheus boundary
+
+```text
+BridgeHost -> OTLP -> OpenTelemetry Collector -> Prometheus -> Grafana
+```
+
+BridgeHost exports only meter `GoldAiTrader.MT5.BridgeHost` using stable
+`OpenTelemetry.Exporter.OpenTelemetryProtocol` and `OpenTelemetry.Extensions.Hosting`
+packages pinned to `1.19.1`. It has no direct `/metrics` endpoint. The existing
+`/health/live` and `/health/ready` routes remain on the authenticated bridge host's
+loopback listener with their existing probe semantics. OTLP export is outbound and does
+not open another BridgeHost listener, register trace/log export, or grant execution authority.
+
+The metrics-only `AddOtlpExporter` registration reads standard configuration keys through
+ASP.NET Core configuration, including environment variables:
+
+| Variable | Meaning |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` (default) or `http/protobuf` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Base Collector URL; default `http://localhost:4317` for gRPC, `http://localhost:4318` for HTTP/protobuf |
+| `OTEL_EXPORTER_OTLP_TIMEOUT` | Export request timeout in milliseconds |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Optional transport authentication headers; inject securely, never commit or log values |
+| `OTEL_METRIC_EXPORT_INTERVAL` | Collection/export interval in milliseconds; SDK default 60000 |
+| `OTEL_METRIC_EXPORT_TIMEOUT` | Reader export timeout in milliseconds |
+| `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` | Keep `cumulative` for this Prometheus pipeline |
+| `OTEL_EXPORTER_OTLP_CERTIFICATE` | Trusted CA certificate path for TLS |
+| `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE`, `OTEL_EXPORTER_OTLP_CLIENT_KEY` | Mounted client certificate/key paths for mTLS |
+
+With this registration, use the general `OTEL_EXPORTER_OTLP_*` endpoint/protocol/header/timeout
+keys above, not their signal-specific `OTEL_EXPORTER_OTLP_METRICS_*` variants. The latter
+transport overrides require a different SDK registration. For HTTP/protobuf, the base
+environment endpoint receives the SDK's `/v1/metrics` suffix. Do not append it twice.
+
+Example environment for a same-machine Collector:
+
+```text
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+OTEL_EXPORTER_OTLP_TIMEOUT=5000
+OTEL_METRIC_EXPORT_INTERVAL=10000
+OTEL_METRIC_EXPORT_TIMEOUT=5000
+OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=cumulative
+```
+
+The [Collector configuration](../deploy/observability/otel-collector.yaml) targets the core
+Collector distribution `0.162.0`. It enables OTLP gRPC (4317), OTLP HTTP/protobuf (4318),
+memory limiting, bounded batches, and Prometheus export (8889). All three listeners default
+to IPv4 loopback. Validate and run with the pinned Collector binary:
+
+```text
+otelcol validate --config=deploy/observability/otel-collector.yaml
+otelcol --config=deploy/observability/otel-collector.yaml
+```
+
+Prometheus scrapes the **Collector's** `http://127.0.0.1:8889/metrics`, never BridgeHost port
+5088. The [Prometheus configuration](../deploy/observability/prometheus.yaml) demonstrates
+a 15-second scrape interval. Point Grafana's Prometheus data source at the private Prometheus
+service. Metric names use underscores, counters end in `_total`, and heartbeat age uses
+`_seconds`.
+
+### Deployment and operational controls
+
+- For Docker, mount the Collector YAML read-only into the pinned
+  `otel/opentelemetry-collector:0.162.0` image. Set `MT5_OTLP_GRPC_BIND=0.0.0.0:4317`,
+  `MT5_OTLP_HTTP_BIND=0.0.0.0:4318`, and `MT5_PROMETHEUS_BIND=0.0.0.0:8889` **inside
+  the Collector container only**. Restrict published ports to host loopback, or keep them
+  entirely on a private container network. Use `http://collector:4318` only when
+  BridgeHost shares that private network, and `collector:8889` as Prometheus's scrape target.
+- For Kubernetes, mount this configuration through a ConfigMap and expose Collector ports
+  through internal Services only. Use NetworkPolicies to allow OTLP from BridgeHost and
+  port 8889 from Prometheus. A same-pod Collector may receive OTLP on loopback; a central
+  Collector needs a private receiver binding and Service DNS. Do not change BridgeHost's
+  loopback binding to accommodate monitoring.
+- Plain HTTP is for local or isolated trusted networking. Across hosts, configure Collector
+  receiver TLS/authentication and exporter HTTPS/mTLS; protect the scrape endpoint as well.
+  Mount certificates and keys through the deployment's secret store. Never copy bridge
+  credentials into metric attributes or reuse bridge HMAC headers for OTLP.
+- Keep Collector memory above its 128 MiB limiter with runtime headroom; set container
+  resource requests/limits and tune batching against measured load. The configuration is
+  an example, not a provisioned deployment.
+- Bridge gauges are sampled at export time; Collector scrapes show the latest received
+  values, not an on-demand MT5 evaluation. Budget export, batch, and scrape intervals in
+  addition to supervisor detection latency. Use `/health/ready` for immediate fail-closed
+  decisions. Export/Collector outages do not change readiness or authorize execution.
+- Alert separately on scrape failure, missing MT5 series, and Collector receive/export
+  failures. The Collector expires series after two minutes without updates; until then,
+  it can serve the last received ready value. Scrape `up=1` alone does not prove BridgeHost
+  is alive or that telemetry is current. Exports are not a durable audit log.
+- Assign one Collector pipeline/scrape target per BridgeHost instance unless a separately
+  reviewed bounded instance-label scheme is introduced. These intentionally minimal resource
+  labels do not distinguish multiple bridge processes merged into one Collector.
+
+### Metric data policy
+
+Instrument labels remain the bounded `transition` values (`connected`, `disconnected`,
+`ready`, `not_ready`) and fixed readiness `reason` categories listed above. Gauges have
+no instrument labels. OTLP resource metadata is restricted in code to the fixed
+`service.name=GoldAiTrader.MT5.BridgeHost`; automatic instance IDs and environment resource
+attributes are not included. No account, broker, symbol, command, request, or secret values
+are exported. Do not enable arbitrary resource-to-label conversion in the Collector.
+Scope labels are disabled by the example; Collector service/target metadata is fixed.
+Prometheus adds its normal scrape job/instance labels for the configured target.
+
+Initial state establishes a baseline and does not increment transition counters. Unchanged
+observations do not increment counters or repeat health transition logs. Changes that occur
+and recover entirely between observations may not be counted.
+
+See the [OTLP SDK configuration reference](https://github.com/open-telemetry/opentelemetry-dotnet/blob/core-1.19.1/src/OpenTelemetry.Exporter.OpenTelemetryProtocol/README.md)
+and [Collector Prometheus exporter configuration](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.162.0/exporter/prometheusexporter)
+when reviewing deployment settings or dependency upgrades.
 ## HMAC authentication and replay
 
 Every request, including an empty poll, requires exactly one `X-GAT-Bridge-Id`,

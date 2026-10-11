@@ -1,0 +1,35 @@
+# OpenTelemetry Collector core distribution 0.162.0.
+# Defaults are for a same-machine collector; override bind endpoints only on a private network.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: ${env:MT5_OTLP_GRPC_BIND:-127.0.0.1:4317}
+      http:
+        endpoint: ${env:MT5_OTLP_HTTP_BIND:-127.0.0.1:4318}
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  batch:
+    timeout: 5s
+    send_batch_size: 256
+    send_batch_max_size: 512
+
+exporters:
+  prometheus:
+    endpoint: ${env:MT5_PROMETHEUS_BIND:-127.0.0.1:8889}
+    metric_expiration: 2m
+    send_timestamps: false
+    enable_open_metrics: true
+    without_scope_info: true
+    translation_strategy: UnderscoreEscapingWithSuffixes
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]

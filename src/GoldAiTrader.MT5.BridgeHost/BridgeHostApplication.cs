@@ -2,6 +2,8 @@ using System.Net;
 using System.Text.Json;
 using GoldAiTrader.Adapters.MT5;
 using GoldAiTrader.Platform;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 namespace GoldAiTrader.MT5.BridgeHost;
 
@@ -30,6 +32,13 @@ public static class MT5BridgeHostApplication
             settings.SymbolMappings, timeProvider: clock));
         builder.Services.AddSingleton<MT5BridgeHealthMetrics>();
         builder.Services.AddSingleton<MT5BridgeHealthMonitor>();
+        builder.Services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource.Clear()
+                .AddService(MT5BridgeHealthMetrics.MeterName, autoGenerateServiceInstanceId: false))
+            .WithMetrics(metrics => metrics
+                .AddMeter(MT5BridgeHealthMetrics.MeterName)
+                .AddOtlpExporter());
+        builder.Services.AddHostedService<MT5BridgeHealthSupervisor>();
         builder.Services.AddSingleton<JsonSerializerOptions>(
             MT5BridgeJson.CreateOptions(settings.Host.MaximumJsonDepth));
         builder.Services.AddSingleton<MT5RequestReplayCache>();
