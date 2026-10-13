@@ -14,4 +14,5 @@
     <ProjectReference Include="../GoldAiTrader.Execution/GoldAiTrader.Execution.csproj" />
     <ProjectReference Include="../GoldAiTrader.Platform/GoldAiTrader.Platform.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="../GoldAiTrader.Data/GoldAiTrader.Data.csproj" /></ItemGroup>
 </Project>
