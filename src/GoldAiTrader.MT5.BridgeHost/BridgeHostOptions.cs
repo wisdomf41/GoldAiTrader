@@ -20,12 +20,15 @@ public sealed record MT5BridgeHostOptions
     public TimeSpan CommandTimeout { get; init; } = TimeSpan.FromSeconds(30);
     public TimeSpan HealthSupervisionInterval { get; init; } = TimeSpan.FromSeconds(1);
     public bool ExternalExecutionEnabled { get; init; }
+    public string? ResearchCaptureDirectory { get; init; }
 
     public MT5LoopbackEndpoint Endpoint =>
         new($"http://{BindAddress}:{Port}");
 
     public void Validate()
     {
+        if (ResearchCaptureDirectory is { } path && (!Path.IsPathFullyQualified(path) || string.IsNullOrWhiteSpace(path)))
+            throw new InvalidOperationException("Research capture requires an absolute storage directory.");
         if (HealthSupervisionInterval < TimeSpan.FromMilliseconds(100) ||
             HealthSupervisionInterval > TimeSpan.FromSeconds(30))
             throw new InvalidOperationException(
@@ -102,6 +105,7 @@ public sealed record MT5BridgeHostSettings(
                 ParseDouble(section["CommandTimeoutSeconds"], 30)),
             HealthSupervisionInterval = TimeSpan.FromSeconds(
                 ParseDouble(section["HealthSupervisionIntervalSeconds"], 1)),
+            ResearchCaptureDirectory = section["ResearchCaptureDirectory"],
             ExternalExecutionEnabled = ParseBool(section["ExternalExecutionEnabled"], false)
         };
 

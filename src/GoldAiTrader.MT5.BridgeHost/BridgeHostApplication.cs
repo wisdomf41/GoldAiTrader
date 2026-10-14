@@ -54,6 +54,7 @@ public static class MT5BridgeHostApplication
             new MT5PlatformGateway(
                 services.GetRequiredService<MT5BridgeState>(),
                 services.GetRequiredService<MT5PollingExecutionTransport>(), clock));
+        builder.Services.AddSingleton<MT5ResearchCapture>();
         builder.Services.AddSingleton<MT5BridgeIngestionService>();
         builder.Services.AddSingleton<MT5BridgeRequestProcessor>();
 

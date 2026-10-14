@@ -47,7 +47,7 @@ public interface IMT5BridgeIngestionService
 public sealed class MT5BridgeIngestionService(
     MT5BridgeState state,
     MT5PollingExecutionTransport executionTransport,
-    MT5BridgeHealthMonitor healthMonitor) : IMT5BridgeIngestionService
+    MT5BridgeHealthMonitor healthMonitor, MT5ResearchCapture? researchCapture = null) : IMT5BridgeIngestionService
 {
     public MT5IngestionResult Accept(MT5HeartbeatMessage message)
     {
@@ -87,6 +87,7 @@ public sealed class MT5BridgeIngestionService(
     public MT5IngestionResult Accept(MT5CompletedBarMessage message)
     {
         state.AcceptCompletedBar(message);
+        researchCapture?.CaptureAccepted(message);
         healthMonitor.Observe();
         return MT5IngestionResult.Accepted;
     }

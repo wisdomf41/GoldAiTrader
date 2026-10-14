@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # GoldAiTrader MT5 bridge local secrets
 platforms/mt5/GoldAiTraderBridge/Config/bridge.secret
+
+# Local research captures and reports
+research-output/

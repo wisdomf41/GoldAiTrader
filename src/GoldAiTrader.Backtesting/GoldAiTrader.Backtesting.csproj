@@ -5,4 +5,6 @@
     <ProjectReference Include="../GoldAiTrader.Risk/GoldAiTrader.Risk.csproj" />
     <ProjectReference Include="../GoldAiTrader.Strategy/GoldAiTrader.Strategy.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="../GoldAiTrader.Data/GoldAiTrader.Data.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../GoldAiTrader.Market/GoldAiTrader.Market.csproj" /></ItemGroup>
 </Project>

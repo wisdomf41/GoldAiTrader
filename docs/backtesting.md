@@ -1321,3 +1321,5 @@ and:
 Backtesting exists to challenge the strategy, not to prove it correct.
 
 When the evidence contradicts the strategy hypothesis, the evidence wins.
+
+The dataset-based offline validation API, capture format, causal walk-forward protocol, costs and research gates are documented in [XAUUSD research validation](xauusd-research-validation.md).
