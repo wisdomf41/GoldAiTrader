@@ -13,6 +13,7 @@
     <Project Path="src/GoldAiTrader.MT5.BridgeHost/GoldAiTrader.MT5.BridgeHost.csproj" />
     <Project Path="src/GoldAiTrader.ML/GoldAiTrader.ML.csproj" />
     <Project Path="src/GoldAiTrader.Platform/GoldAiTrader.Platform.csproj" />
+    <Project Path="src/GoldAiTrader.Research/GoldAiTrader.Research.csproj" />
     <Project Path="src/GoldAiTrader.Risk/GoldAiTrader.Risk.csproj" />
     <Project Path="src/GoldAiTrader.Strategy/GoldAiTrader.Strategy.csproj" />
   </Folder>

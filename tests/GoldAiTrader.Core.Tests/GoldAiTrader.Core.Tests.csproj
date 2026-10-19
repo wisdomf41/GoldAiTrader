@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\GoldAiTrader.Strategy\GoldAiTrader.Strategy.csproj" />
     <ProjectReference Include="..\..\src\GoldAiTrader.Execution\GoldAiTrader.Execution.csproj" />
     <ProjectReference Include="..\..\src\GoldAiTrader.Backtesting\GoldAiTrader.Backtesting.csproj" />
+    <ProjectReference Include="..\..\src\GoldAiTrader.Research\GoldAiTrader.Research.csproj" />
     <ProjectReference Include="..\..\src\GoldAiTrader.Data\GoldAiTrader.Data.csproj" />
     <ProjectReference Include="..\..\src\GoldAiTrader.Platform\GoldAiTrader.Platform.csproj" />
     <ProjectReference Include="..\..\src\GoldAiTrader.ML\GoldAiTrader.ML.csproj" />
