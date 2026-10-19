@@ -23,18 +23,26 @@ public static class ResearchDatasetFile
 
     public static ResearchDataset Load(ReadOnlySpan<byte> bytes)
     {
-        var dataset = JsonSerializer.Deserialize<ResearchDataset>(bytes, Options)
-            ?? throw new ArgumentException("Missing research dataset.");
+        var dataset = ParseForAudit(bytes);
         dataset.Validate();
         return dataset;
     }
+
+    // Structural parsing only; audit or Validate before using any candles in research.
+    public static ResearchDataset ParseForAudit(ReadOnlySpan<byte> bytes) =>
+        JsonSerializer.Deserialize<ResearchDataset>(bytes, Options)
+        ?? throw new ArgumentException("Missing research dataset.");
 
     public static string Fingerprint(ResearchDataset dataset) =>
         Convert.ToHexString(SHA256.HashData(Serialize(dataset)));
 
     public static void Save(string path, ResearchDataset dataset)
     {
-        var bytes = Serialize(dataset);
+        WriteNew(path, Serialize(dataset));
+    }
+
+    public static void WriteNew(string path, ReadOnlySpan<byte> bytes)
+    {
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -84,13 +92,13 @@ public sealed class ResearchBarArchive(string directory)
         lock (sync)
         {
             var files = Directory.EnumerateFiles(directory, "*.json")
-                .Select(path => ResearchDatasetFile.Load(File.ReadAllBytes(path))).ToArray();
+                .Order(StringComparer.Ordinal).Select(path => ResearchDatasetFile.Load(File.ReadAllBytes(path))).ToArray();
             if (files.Length == 0 || files.Any(x => x.BrokerSymbol != files[0].BrokerSymbol ||
                     x.Source != ResearchSource.Mt5Telemetry || x.Bars.Count != 1))
                 throw new ArgumentException("Archive must contain a single broker symbol and telemetry source.");
             var result = new ResearchDataset(1, "XAUUSD", files[0].BrokerSymbol,
                 ResearchSource.Mt5Telemetry, asOfUtc, files.SelectMany(x => x.Bars)
-                    .OrderBy(x => x.AvailableAtUtc).ThenBy(x => x.TimeframeMinutes).ToArray());
+                    .OrderBy(x => x.AvailableAtUtc).ThenBy(x => x.TimeframeMinutes).ThenBy(x => x.OpenTimeUtc).ToArray());
             result.Validate();
             return result;
         }

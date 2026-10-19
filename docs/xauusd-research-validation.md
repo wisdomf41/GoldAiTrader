@@ -40,24 +40,11 @@ reports should be checked in with large market histories.
 
 ## Running research
 
-The public APIs in GoldAiTrader.Backtesting accept ResearchDataset directly:
-
-    var dataset = ResearchDatasetFile.Load(File.ReadAllBytes(datasetPath));
-    var settings = new ResearchRunSettings(
-        10000m,
-        new SymbolSpecification(.01m, 1m, .01m, 100m, .01m, .10m,
-            dataset.BrokerSymbol, "XAUUSD", 100m),
-        new ResearchCosts(FallbackSpread: .30m, CommissionPerLotPerSide: 3.50m,
-            SlippagePricePerSide: .05m),
-        new TrendPullbackOptions(), new RiskOptions());
-    var folds = WalkForwardValidation.Plan(dataset,
-        trainingBars: 1200, validationBars: 600, outOfSampleBars: 600);
-    var report = WalkForwardValidation.Run(dataset, settings, folds, new ValidationPolicy());
-    File.WriteAllText(reportPath, JsonSerializer.Serialize(report,
-        new JsonSerializerOptions { WriteIndented = true }));
-
-These example contract/cost values are illustrative, not broker calibration or evidence of profitability.
-Supply broker specifications and measured cost assumptions before interpreting performance.
+Use the offline `GoldAiTrader.Research` utility described in [the operational workflow](xauusd-research-workflow.md).
+It exports an archive, audits a dataset, creates an uncalibrated configuration template, and runs
+TrendPullbackV1 through the existing walk-forward engine. It has no bridge connection or order path.
+Missing calibration, invalid data, unexplained gaps and insufficient warm-up/folds fail closed.
+The configuration template deliberately supplies no broker costs, contract values or capital.
 The version-1 currency model is a linear USD-quoted contract in a USD research account:
 TickValuePerVolumeUnit must equal TickSize * ContractSize. Other account currencies need explicit
 conversion support before use. Contract size is units per lot, commission is USD per lot per side,
